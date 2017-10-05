@@ -23,8 +23,8 @@
 #define BITS(c) (((c) >> 1) & 3)
 extern const char *nucs;
 
-// kth character in BITSEQ
-#define CHAR(seq, k) nucs[(seq) >> (2 * (SEQSIZ - (k) - 1))]
+// ith character in BITSEQ of length k starting from the MSB
+#define CHAR(seq, i, k) nucs[((seq) >> (2 * ((k) - (i) - 1))) & 3]
 
 // convert sequence of characters into sequence of 2 bits, size of array returned
 // output malloc'd, should be free'd as well
@@ -54,5 +54,8 @@ int mindist_bit(BITSEQ *seq, size_t n, BITSEQ str, size_t k, size_t *pos);
 // distance of pattern to sequence from beginning positions
 int dist_char(char *seq, BITSEQ str, size_t k);
 int dist_bit(BITSEQ *seq, size_t n, BITSEQ str, size_t k);
+
+// print bit sequence to file as nucleotide sequence
+void printbits(FILE *f, BITSEQ str, size_t k);
 
 #endif
