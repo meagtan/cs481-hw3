@@ -1,6 +1,7 @@
 #include "medstr.h"
-#include <limits.h> // may not need this
+#include <limits.h>    // may not need this
 #include <ctype.h>
+#include <x86intrin.h> // builtin popcnt, why use a for loop for something the CPU handles
 
 // initial maximum size for dynamic arrays
 #define MAXSIZ 10
@@ -96,6 +97,7 @@ BITSEQ medstr_char(char *dna[], size_t t, size_t k)
 	size_t i = 1; // depth in search tree, < k
 	int bestdist = t * k, dist;
 	size_t *bestpos, *pos; // may use bestpos and pos later, not necessary now
+	pos = calloc(t, sizeof *pos);
 
 	// to move to child, shift str by 2 and increment i
 	// to go to next leaf or bypass, increment str
@@ -133,6 +135,41 @@ BITSEQ medstr_char(char *dna[], size_t t, size_t k)
 	return best;
 }
 
+BITSEQ medstr_bit(BITSEQ *dna[], size_t t, size_t n, size_t k)
+{
+	BITSEQ str = 0, best = 0;
+	size_t i = 1; // depth in search tree, < k
+	int bestdist = t * k, dist;
+	size_t *bestpos, *pos; // may use bestpos and pos later, not necessary now
+	pos = calloc(t, sizeof *pos);
+
+	// to move to child, shift str by 2 and increment i
+ 	// to go to next leaf or bypass, increment str
+	// if str & 3 == 3, backtrack by shifting str to the right and decrementing 1
+	while (i) {
+		dist = totdist_bit(dna, t, n, str, i, pos);
+
+		if (i < k) {
+			if (dist > bestdist)
+				BYPASS(str);
+			else
+				NEXT(str);
+		} else {
+			if (dist < bestdist) {
+				bestdist = dist;
+				best = str;
+				// bestpos = pos; // do I need to keep this?
+                        }
+			NEXT(str);
+		}
+	}
+	free(pos); // remove when not using pos
+
+	return best;
+}
+
+// totdist
+
 int totdist_char(char *dna[], size_t t, BITSEQ str, size_t k, size_t *pos)
 {
 	int res = 0;
@@ -142,6 +179,17 @@ int totdist_char(char *dna[], size_t t, BITSEQ str, size_t k, size_t *pos)
 	return res;
 }
 
+int totdist_bit(BITSEQ *dna[], size_t t, size_t n, BITSEQ str, size_t k, size_t *pos)
+{
+	int res = 0;
+	for (size_t i = 0; i < t; ++i)
+		res += mindist_bit(dna[i], n, str, k, pos+i);
+	return res;
+}
+
+// mindist
+
+// utilize pos here, also take the previous distance and whether it's a parent or sibling
 int mindist_char(char *seq, BITSEQ str, size_t k, size_t *pos)
 {
 	int res = k, dist;
@@ -149,11 +197,27 @@ int mindist_char(char *seq, BITSEQ str, size_t k, size_t *pos)
 		dist = dist_char(seq+i, str, k);
 		if (dist < res) {
 			res = dist;
-			// *pos = i;
+			// printf("*pos = %zu\n", i);
+			*pos = i;
 		}
 	}
 	return res;
 }
+
+int mindist_bit(BITSEQ *seq, size_t n, BITSEQ str, size_t k, size_t *pos)
+{
+	int res = k, dist;
+	for (size_t i = k-1; i < n; ++i) {
+		dist = dist_bit(seq, i, str, k);
+		if (dist < res) {
+			res = dist;
+			*pos = i - k + 1;
+		}
+	}
+	return res;
+}
+
+// dist
 
 // assumes seq has at least k characters
 int dist_char(char *seq, BITSEQ str, size_t k)
@@ -163,6 +227,25 @@ int dist_char(char *seq, BITSEQ str, size_t k)
 		res += (seq[i] != CHAR(str, i, k));
 	return res;
 }
+
+// test this
+int dist_bit(BITSEQ *seq, size_t i, BITSEQ str, size_t k)
+{
+	seq += i / SEQSIZ;
+	i %= SEQSIZ;
+
+	// whether pattern contained in one BITSEQ
+	if (i >= k) {
+		// right justify and compare
+		str ^= *seq >> (SEQSIZ - i - 1); // & (1 << k - 1);
+	} else {
+		// left shift end of *(seq-1) by i and add to right justified portion in *seq
+		str ^= *(seq-1) << i & 1 << (k - 1) | *seq >> (SEQSIZ - i - 1);
+	}
+	return __builtin_popcountll(str); // count nonzero bits in str
+}
+
+// print
 
 void printbits(FILE *f, BITSEQ str, size_t k)
 {

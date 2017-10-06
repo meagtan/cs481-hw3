@@ -53,7 +53,7 @@ int mindist_bit(BITSEQ *seq, size_t n, BITSEQ str, size_t k, size_t *pos);
 
 // distance of pattern to sequence from beginning positions
 int dist_char(char *seq, BITSEQ str, size_t k);
-int dist_bit(BITSEQ *seq, size_t n, BITSEQ str, size_t k);
+int dist_bit(BITSEQ *seq, size_t i, BITSEQ str, size_t k); // i is ending position, to be divided by SEQSIZ
 
 // print bit sequence to file as nucleotide sequence
 void printbits(FILE *f, BITSEQ str, size_t k);
