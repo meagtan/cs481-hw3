@@ -78,9 +78,11 @@ int main(void)
 */
 
 	// call median string function
-	BITSEQ pat = medstr_char(dna, t, k);
+	BITSEQ pat =  medstr_bit(dnab, t, n, k);  //*/ medstr_char(dna, t, k);
 
-	// printf("%d\n", pat);
+	size_t *pos = malloc(t * sizeof(size_t));
+	printf("%d\t%d\n", totdist_char(dna, t, pat, k, pos), totdist_bit(dnab, t, n, pat, k, pos));
+	free(pos);
 
 	// write output value
 	FILE *fout = fopen(OUTPUT, "w");
@@ -93,7 +95,7 @@ int main(void)
 		fputc(CHAR(pat, i, k), fout);
 		putchar(CHAR(pat, i, k));
 	}
-	// printf("\n%llx\n", pat);
+	printf("\n");
 	fclose(fout);
 
 

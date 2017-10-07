@@ -9,6 +9,8 @@
 #define BYPASS(str) do { ++str; while (!(str & 3)) {str >>= 2; --i;}} while (0)
 #define NEXT(str)   do { if (i == k) BYPASS(str); else {str <<= 2; ++i;} } while (0)
 
+#define EVENDIGITS 0x5555555555555555ll
+
 const char *nucs = "ACTG";
 
 BITSEQ *writebits(char *seq, size_t *size)
@@ -182,6 +184,7 @@ int totdist_char(char *dna[], size_t t, BITSEQ str, size_t k, size_t *pos)
 int totdist_bit(BITSEQ *dna[], size_t t, size_t n, BITSEQ str, size_t k, size_t *pos)
 {
 	int res = 0;
+	// printf("totdist_bit(dna, %zu, %zu, %llx, %zu, pos)\n", t, n, str, k);
 	for (size_t i = 0; i < t; ++i)
 		res += mindist_bit(dna[i], n, str, k, pos+i);
 	return res;
@@ -207,13 +210,16 @@ int mindist_char(char *seq, BITSEQ str, size_t k, size_t *pos)
 int mindist_bit(BITSEQ *seq, size_t n, BITSEQ str, size_t k, size_t *pos)
 {
 	int res = k, dist;
-	for (size_t i = k-1; i < n; ++i) {
+	// i represents ending position, not included in string
+	for (size_t i = k; i <= n; ++i) {
+	        // printf("dist_bit(seq, %zu, %llx, %zu)\n", i, str, k);
 		dist = dist_bit(seq, i, str, k);
 		if (dist < res) {
 			res = dist;
 			*pos = i - k + 1;
 		}
 	}
+	// printf("\n");
 	return res;
 }
 
@@ -231,18 +237,34 @@ int dist_char(char *seq, BITSEQ str, size_t k)
 // test this
 int dist_bit(BITSEQ *seq, size_t i, BITSEQ str, size_t k)
 {
+        // printf("dist_bit(seq, %zu, %llx, %zu)\n", i, str, k);
 	seq += i / SEQSIZ;
 	i %= SEQSIZ;
 
+	// printf("dist_bit(seq, %zu, %llx, %zu)\n", i, str, k);
 	// whether pattern contained in one BITSEQ
 	if (i >= k) {
 		// right justify and compare
-		str ^= *seq >> (SEQSIZ - i - 1); // & (1 << k - 1);
+		BITSEQ pat = (*seq >> 2*(SEQSIZ - i)) & (1ll << 2*k) - 1;
+		// printbits(stdout, pat, k); printbits(stdout,str,k);
+		// putchar('\n');
+		// printf("%llx\t%llx\t", str, pat);
+		str ^= pat;
 	} else {
 		// left shift end of *(seq-1) by i and add to right justified portion in *seq
-		str ^= *(seq-1) << i & 1 << (k - 1) | *seq >> (SEQSIZ - i - 1);
+		BITSEQ patl = (*(seq-1) << 2*i) & (1ll<<2*k)-1,
+		       patr = (*seq >> 2*(SEQSIZ - i));
+		// printbits(stdout,patl|patr,k); printbits(stdout,patr,i); printbits(stdout,str,k);
+		// putchar('\n');
+		// printf("%llx\t%llx\t%llx\t", str, patl, patr);
+		str ^= (patl | patr) & (1ll << 2*k)-1;
 	}
-	return __builtin_popcountll(str); // count nonzero bits in str
+
+	// need popcount in base 4
+	str = (str & EVENDIGITS) | ((str & (EVENDIGITS << 1)) >> 1);
+	int res = __builtin_popcountll(str); // count nonzero bits in str
+	// printf("%d\n", res);
+	return res;
 }
 
 // print
