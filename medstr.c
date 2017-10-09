@@ -43,6 +43,7 @@ BITSEQ *writebits(char *seq, size_t *size)
 	return res;
 }
 
+// reads one row
 BITSEQ *writebitsf(FILE *f, size_t *size)
 {
         size_t last = 0, maxsiz = MAXSIZ;
