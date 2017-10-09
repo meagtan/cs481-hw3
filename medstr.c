@@ -2,16 +2,34 @@
 #include <limits.h>    // may not need this
 #include <ctype.h>
 #include <x86intrin.h> // builtin popcnt, why use a for loop for something the CPU handles
+#include <string.h>
 
 // initial maximum size for dynamic arrays
 #define MAXSIZ 10
 
-#define BYPASS(str) do { ++str; while (!(str & 3)) {str >>= 2; --i;}} while (0)
-#define NEXT(str)   do { if (i == k) BYPASS(str); else {str <<= 2; ++i;} } while (0)
+#define BYPASS(str) do { ++str; prevpat = NEIGHBOR; while (!(str & 3)) {str >>= 2; --i; prevpat = FIRST;}} while (0)
+#define NEXT(str)   do { if (i == k) BYPASS(str); else {str <<= 2; ++i; prevpat = PARENT;} } while (0)
 
 #define EVENDIGITS 0x5555555555555555ll
 
 const char *nucs = "ACTG";
+
+/* Possible optimization strategy exploiting some optimal substructure:
+ * Store the best positions of the last pattern examined, and try to bound the distance of the current pattern to each string.
+ * - If str is reached via a bypass, omitting any backtracking, its last character was changed to another character.
+ *   If, for any sequence seq, the best position j of last str on seq satisfies seq[j+i-1] == str[i-1] for current str,
+ *   then we can say the distance of str to seq is d-1 with best position j, where d is the best distance of str to last seq. Otherwise run usual distance.
+ * - If str is reached from a parent, its last character was added to the parent. If the best distance of seq to parent was d at position j, and
+ *   seq[j+i-1] == str[i-1] for current str, we can extend the best position of the parent to the child, as any other occurrence of the child has to be
+ *   at least d away from the parent, independently of the matching of the last character. Otherwise calculate distance as usual again.
+ * Try this after you test _bits functions.
+ */
+// for convenience, will use global variables instead of changing function arguments
+// true if the previous pattern shares its first k-1 characters with the current pattern
+enum {FIRST, PARENT, NEIGHBOR} prevpat;
+// previous distance values calculated
+int *dists = NULL;
+
 
 BITSEQ *writebits(char *seq, size_t *size)
 {
@@ -84,16 +102,6 @@ BITSEQ *writebitsf(FILE *f, size_t *size)
 }
 
 // branch-and-bound algorithm
-/* Possible optimization strategy exploiting some optimal substructure:
- * Store the best positions of the last pattern examined, and try to bound the distance of the current pattern to each string.
- * - If str is reached via a bypass, omitting any backtracking, its last character was changed to another character.
- *   If, for any sequence seq, the best position j of last str on seq satisfies seq[j+i-1] == str[i-1] for current str,
- *   then we can say the distance of str to seq is d-1 with best position j, where d is the best distance of str to last seq. Otherwise run usual distance.
- * - If str is reached from a parent, its last character was added to the parent. If the best distance of seq to parent was d at position j, and
- *   seq[j+i-1] == str[i-1] for current str, we can extend the best position of the parent to the child, as any other occurrence of the child has to be
- *   at least d away from the parent, independently of the matching of the last character. Otherwise calculate distance as usual again.
- * Try this after you test _bits functions.
- */
 BITSEQ medstr_char(char *dna[], size_t t, size_t k)
 {
 	BITSEQ str = 0, best = 0;
@@ -101,6 +109,8 @@ BITSEQ medstr_char(char *dna[], size_t t, size_t k)
 	int bestdist = t * k, dist;
 	size_t *bestpos, *pos; // may use bestpos and pos later, not necessary now
 	pos = calloc(t, sizeof *pos);
+	prevpat = 0;
+	dists = calloc(t, sizeof(int));
 
 	// to move to child, shift str by 2 and increment i
 	// to go to next leaf or bypass, increment str
@@ -135,6 +145,8 @@ BITSEQ medstr_char(char *dna[], size_t t, size_t k)
 		// NEXT(str);
 	}
 
+	free(dists);
+	dists = NULL;
 	return best;
 }
 
@@ -145,6 +157,8 @@ BITSEQ medstr_bit(BITSEQ *dna[], size_t t, size_t n, size_t k)
 	int bestdist = t * k, dist;
 	size_t *bestpos, *pos; // may use bestpos and pos later, not necessary now
 	pos = calloc(t, sizeof *pos);
+	prevpat = 0;
+	dists = calloc(t, sizeof(int));
 
 	// to move to child, shift str by 2 and increment i
  	// to go to next leaf or bypass, increment str
@@ -168,6 +182,9 @@ BITSEQ medstr_bit(BITSEQ *dna[], size_t t, size_t n, size_t k)
 	}
 	free(pos); // remove when not using pos
 
+	free(dists);
+	dists = NULL;
+	prevpat = 0;
 	return best;
 }
 
@@ -175,19 +192,34 @@ BITSEQ medstr_bit(BITSEQ *dna[], size_t t, size_t n, size_t k)
 
 int totdist_char(char *dna[], size_t t, BITSEQ str, size_t k, size_t *pos)
 {
-	int res = 0;
+	int res = 0, temp, oldpos;
 	// iterate through each sequence in dna
-	for (size_t i = 0; i < t; ++i)
-		res += mindist_char(dna[i], str, k, pos+i);
+	for (size_t i = 0; i < t; ++i) {
+		if (!prevpat || pos[i]+k-1 >= strlen(dna[i]) || dna[i][(oldpos=pos[i])+k-1] != (str & 3))
+			dists[i] = mindist_char(dna[i], str, k, pos+i);
+		else if (prevpat == NEIGHBOR)
+			--dists[i];
+		res += dists[i];
+	}
 	return res;
 }
 
 int totdist_bit(BITSEQ *dna[], size_t t, size_t n, BITSEQ str, size_t k, size_t *pos)
 {
-	int res = 0;
+	int res = 0, temp;
 	// printf("totdist_bit(dna, %zu, %zu, %llx, %zu, pos)\n", t, n, str, k);
-	for (size_t i = 0; i < t; ++i)
-		res += mindist_bit(dna[i], n, str, k, pos+i);
+	for (size_t i = 0; i < t; ++i) {
+		if (!prevpat || pos[i]+k-1 >= n || ((dna[i][(pos[i]+k-1)/SEQSIZ] >> 2*(SEQSIZ-(pos[i]+k-1)%SEQSIZ-1)) ^ str) & 3)
+			dists[i] = mindist_bit(dna[i], n, str, k, pos+i);
+		else if (prevpat == NEIGHBOR)
+			--dists[i]; // last character was mismatch, now match
+		else if (dists[i] != (temp = mindist_bit(dna[i], n, str, k, pos+i))) {
+			printbits(stdout, str, k);
+			printf("\t%d\t%d\n", dists[i], temp);
+			dists[i] = temp;
+		}
+		res += dists[i];
+	}
 	return res;
 }
 
@@ -263,9 +295,7 @@ int dist_bit(BITSEQ *seq, size_t i, BITSEQ str, size_t k)
 
 	// need popcount in base 4
 	str = (str & EVENDIGITS) | ((str & (EVENDIGITS << 1)) >> 1);
-	int res = __builtin_popcountll(str); // count nonzero bits in str
-	// printf("%d\n", res);
-	return res;
+	return __builtin_popcountll(str); // count nonzero bits in str
 }
 
 // print
