@@ -8,7 +8,7 @@
 #define MAXSIZ 10
 #define MAXCHAR 100
 
-extern int *dists;
+// extern int *dists;
 
 int main(void)
 {
@@ -21,10 +21,10 @@ int main(void)
 	}
 
 
-	char **dna = malloc(MAXSIZ * sizeof(char *));
+	// char **dna = malloc(MAXSIZ * sizeof(char *));
 	size_t t = 0, maxsiz = MAXSIZ;
 
-        // BITSEQ **dnab = malloc(MAXSIZ * sizeof(BITSEQ *));
+        BITSEQ **dnab = malloc(MAXSIZ * sizeof(BITSEQ *));
         size_t n;
 	int k;
 
@@ -33,63 +33,34 @@ int main(void)
 		fprintf(stderr, "Error: only patterns of length < %d are allowed. We don't have 600 years to wait for the program to finish.\n", SEQSIZ);
 		return -1;
 	}
-	fgetc(fin); // newline
+	fgetc(fin); // skip newline
 
-	// won't be using this in final version, writebits should take stream
+	// read each line from stream to dnab
 	while (!feof(fin)) {
 		// if dynamic array full
 		if (t == maxsiz) {
 			maxsiz <<= 1;
-			dna = realloc(dna, maxsiz * sizeof(BITSEQ *)); // dnab
+			dnab = realloc(dnab, maxsiz * sizeof(BITSEQ *)); // dnab
 		}
 
-		dna[t] = malloc(MAXCHAR * sizeof(char));
-		fgets(dna[t], MAXCHAR, fin); // may add newlines to strings
-		++t;
-		// dnab[t] = writebitsf(fin, &n);
-		// if (dnab[t] != NULL) ++t;
+		// dna[t] = malloc(MAXCHAR * sizeof(char));
+		// fgets(dna[t], MAXCHAR, fin); // may add newlines to strings
 
-		// print sequence
-		// printf("%d\t", t);
-                // for (int i = 0; i < n; ++i)
-                //         printf("%c", nucs[(dnab[t-1][i / SEQSIZ] >> (2 * SEQSIZ - 2 * (i % SEQSIZ) - 2)) & 3]); // CHAR(dnab[t-1])
-                // printf("\n");
-
+		dnab[t] = writebitsf(fin, &n);
+		if (dnab[t] != NULL) ++t;
 	}
 
 	fclose(fin);
-
-	// printf("File read\n");
-
-	/*
-	// create bit array
-	BITSEQ **dnab = malloc(t * sizeof(BITSEQ *));
-	size_t n;
-	FILE *fin = fopen(INPUT, "r");
-	// for (char c = fgetc(fin); c != '\n'; c = fgetc(fin));
-
-	for (size_t i = 0; i < t; ++i) {
-		dnab[i] = writebitsf(fin, &n); // later change to read directly from stream
-	}
-
-	fclose(fin);
-
-	for (size_t j = 0; j < t; ++j) {
-		for (int i = 0; i < n; ++i)
-                	printf("%c", nucs[(dnab[j][i / SEQSIZ] >> (2 * SEQSIZ - 2 * (i % SEQSIZ) - 2)) & 3]);
-		printf("\n");
-	}
-	*/
 
 	// call median string function
-	BITSEQ pat = /* medstr_bit(dnab, t, n, k);  // */ medstr_char(dna, t, k);
+	BITSEQ pat = medstr_bit(dnab, t, n, k);  // */ medstr_char(dna, t, k);
 
-
-	size_t *pos = malloc(t * sizeof(size_t));
-	dists = malloc(t * sizeof(int));
-	printf("Distance: %d\n", totdist_char(dna, t, pat, k, pos) /* , totdist_bit(dnab, t, n, pat, k, pos) */);
-	free(pos);
-	free(dists);
+	// report distance to stdout
+	// size_t *pos = malloc(t * sizeof(size_t));
+	// dists = malloc(t * sizeof(int));
+	// printf("Distance: %d\n", /* totdist_char(dna, t, pat, k, pos), */ totdist_bit(dnab, t, n, pat, k, pos));
+	// free(pos);
+	// free(dists);
 
 	// write output value
 	FILE *fout = fopen(OUTPUT, "w");
@@ -98,22 +69,18 @@ int main(void)
 		return -1;
 	}
 
-	// printf("Pattern: ");
-	for (size_t i = 0; i < k; ++i) {
-		fputc(CHAR(pat, i, k), fout);
-		// putchar(CHAR(pat, i, k));
-	}
-	// printf("\n");
+	printbits(fout, pat, k);
+	fputc('\n', fout);
 	fclose(fout);
 
 
 	// free arrays
 	for (size_t i = 0; i < t; ++i) {
-		free(dna[i]);
-		// free(dnab[i]); // comment out this line if not using dnab
+		// free(dna[i]);
+		free(dnab[i]);
 	}
-	free(dna);
-	// free(dnab);
+	// free(dna);
+	free(dnab);
 
 	return 0;
 }

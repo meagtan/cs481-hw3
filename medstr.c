@@ -1,14 +1,12 @@
 #include "medstr.h"
-#include <limits.h>    // may not need this
 #include <ctype.h>
 #include <x86intrin.h> // builtin popcnt, why use a for loop for something the CPU handles
-#include <string.h>
 
 // initial maximum size for dynamic arrays
 #define MAXSIZ 10
 
-#define BYPASS(str) do { ++str; prevpat = NEIGHBOR; while (!(str & 3)) {str >>= 2; --i; prevpat = FIRST;}} while (0)
-#define NEXT(str)   do { if (i == k) BYPASS(str); else {str <<= 2; ++i; prevpat = PARENT;} } while (0)
+#define BYPASS(str) do { ++str; /* prevpat = NEIGHBOR; */ while (!(str & 3)) {str >>= 2; --i; /* prevpat = FIRST; */}} while (0)
+#define NEXT(str)   do { if (i == k) BYPASS(str); else {str <<= 2; ++i; /* prevpat = PARENT; */} } while (0)
 
 #define EVENDIGITS 0x5555555555555555ll
 
@@ -22,13 +20,16 @@ const char *nucs = "ACTG";
  * - If str is reached from a parent, its last character was added to the parent. If the best distance of seq to parent was d at position j, and
  *   seq[j+i-1] == str[i-1] for current str, we can extend the best position of the parent to the child, as any other occurrence of the child has to be
  *   at least d away from the parent, independently of the matching of the last character. Otherwise calculate distance as usual again.
- * Try this after you test _bits functions.
+ * Or simply, if the first k-1 characters of the current pattern are the same as those of the previous pattern, and the kth character of the current pattern
+ *  occurs on the best position of the previous pattern, then the best position of the current pattern will also be the best position of the previous pattern,
+ *  with distance decremented by 1 if the previous pattern was also k characters.
+ * After testing: strangely and disappointingly, this actually slows down computation by about 20%. Related code commented out, including the global variables below.
  */
 // for convenience, will use global variables instead of changing function arguments
 // true if the previous pattern shares its first k-1 characters with the current pattern
-enum {FIRST, PARENT, NEIGHBOR} prevpat;
+// enum {FIRST, PARENT, NEIGHBOR} prevpat;
 // previous distance values calculated
-int *dists = NULL;
+// int *dists = NULL;
 
 
 BITSEQ *writebits(char *seq, size_t *size)
@@ -50,12 +51,11 @@ BITSEQ *writebits(char *seq, size_t *size)
 		} else {
 			// push current char onto topmost element of res
 			res[last] = (res[last] << 2) | BITS(*seq);
-			// printf("%llx\n", res[0]);
 		}
 	}
 
 	// if last element of res not complete, left justify it
-	res[last] <<= 2 * (SEQSIZ - i); // verify this
+	res[last] <<= 2 * (SEQSIZ - i);
 
 	*size = last * SEQSIZ + i;
 	return res;
@@ -64,9 +64,9 @@ BITSEQ *writebits(char *seq, size_t *size)
 // reads one row
 BITSEQ *writebitsf(FILE *f, size_t *size)
 {
-        size_t last = 0, maxsiz = MAXSIZ;
-        BITSEQ *res = calloc(sizeof(BITSEQ), maxsiz);
-        int i; // number of nucleotides in current BITSEQ, after one iteration of for loop
+	size_t last = 0, maxsiz = MAXSIZ;
+	BITSEQ *res = calloc(sizeof(BITSEQ), maxsiz);
+	int i; // number of nucleotides in current BITSEQ, after one iteration of for loop
 	char c;
 
 	// skip non-alphabetic characters
@@ -77,25 +77,24 @@ BITSEQ *writebitsf(FILE *f, size_t *size)
 		return NULL;
 	}
 
-        for (i = 0; !feof(f) && isalpha(c); c = fgetc(f), ++i) {
-                // if current BITSEQ full, create another one
-                if (i == SEQSIZ) {
-                        i = 0;
-                        // extend array
-                        if (last + 1 == maxsiz) {
-                                maxsiz <<= 1;
+	for (i = 0; !feof(f) && isalpha(c); c = fgetc(f), ++i) {
+		// if current BITSEQ full, create another one
+		if (i == SEQSIZ) {
+			i = 0;
+			// extend array
+			if (last + 1 == maxsiz) {
+				maxsiz <<= 1;
                                 res = realloc(res, sizeof(BITSEQ)*maxsiz);
                         }
                         res[++last] = BITS(c);
                 } else {
                         // push current char onto topmost element of res
                         res[last] = (res[last] << 2) | BITS(c);
-                        // printf("%llx\n", res[0]);
                 }
         }
 
         // if last element of res not complete, left justify it
-        res[last] <<= 2 * (SEQSIZ - i); // verify this
+        res[last] <<= 2 * (SEQSIZ - i);
 
         *size = last * SEQSIZ + i;
         return res;
@@ -109,25 +108,14 @@ BITSEQ medstr_char(char *dna[], size_t t, size_t k)
 	int bestdist = t * k, dist;
 	size_t *bestpos, *pos; // may use bestpos and pos later, not necessary now
 	pos = calloc(t, sizeof *pos);
-	prevpat = 0;
-	dists = calloc(t, sizeof(int));
+	// prevpat = 0;
+	// dists = calloc(t, sizeof(int));
 
 	// to move to child, shift str by 2 and increment i
 	// to go to next leaf or bypass, increment str
 	// if str & 3 == 3, backtrack by shifting str to the right and decrementing 1
 	while (i) {
-		/*
-		printf("%d\t%llx\t", i, str);
-		printbits(stdout, str, i);
-		printf("%llx", str);
-		*/
-
 		dist = totdist_char(dna, t, str, i, pos);
-		/*
-		if (str == 0xa07)
-			printf("\t%d\t%d", mindist_char(dna[0], str, k, pos), dist_char(dna[0] + 24, str, k));
-		printf("\t%d\n", dist);
-		*/
 		if (i < k) {
 			if (dist > bestdist)
 				BYPASS(str);
@@ -137,16 +125,14 @@ BITSEQ medstr_char(char *dna[], size_t t, size_t k)
 			if (dist < bestdist) {
 				bestdist = dist;
 				best = str;
-				// printf("%llx\t%d\n", best, dist);
 				// bestpos = pos;
 			}
 			NEXT(str);
-		}// */
-		// NEXT(str);
+		}
 	}
 
-	free(dists);
-	dists = NULL;
+	// free(dists);
+	// dists = NULL;
 	return best;
 }
 
@@ -157,8 +143,8 @@ BITSEQ medstr_bit(BITSEQ *dna[], size_t t, size_t n, size_t k)
 	int bestdist = t * k, dist;
 	size_t *bestpos, *pos; // may use bestpos and pos later, not necessary now
 	pos = calloc(t, sizeof *pos);
-	prevpat = 0;
-	dists = calloc(t, sizeof(int));
+	// prevpat = 0;
+	// dists = calloc(t, sizeof(int));
 
 	// to move to child, shift str by 2 and increment i
  	// to go to next leaf or bypass, increment str
@@ -175,16 +161,16 @@ BITSEQ medstr_bit(BITSEQ *dna[], size_t t, size_t n, size_t k)
 			if (dist < bestdist) {
 				bestdist = dist;
 				best = str;
-				// bestpos = pos; // do I need to keep this?
+				// bestpos = pos;
                         }
 			NEXT(str);
 		}
 	}
 	free(pos); // remove when not using pos
 
-	free(dists);
-	dists = NULL;
-	prevpat = 0;
+	// free(dists);
+	// dists = NULL;
+	// prevpat = 0;
 	return best;
 }
 
@@ -192,33 +178,29 @@ BITSEQ medstr_bit(BITSEQ *dna[], size_t t, size_t n, size_t k)
 
 int totdist_char(char *dna[], size_t t, BITSEQ str, size_t k, size_t *pos)
 {
-	int res = 0, temp, oldpos;
+	int res = 0;
 	// iterate through each sequence in dna
 	for (size_t i = 0; i < t; ++i) {
-		if (!prevpat || pos[i]+k-1 >= strlen(dna[i]) || dna[i][(oldpos=pos[i])+k-1] != (str & 3))
-			dists[i] = mindist_char(dna[i], str, k, pos+i);
-		else if (prevpat == NEIGHBOR)
-			--dists[i];
-		res += dists[i];
+		// if (!prevpat || pos[i]+k-1 >= strlen(dna[i]) || dna[i][pos[i]+k-1] != (str & 3))
+		// 	dists[i] = mindist_char(dna[i], str, k, pos+i);
+		// else if (prevpat == NEIGHBOR)
+		// 	--dists[i];
+		// res += dists[i];
+		res += mindist_char(dna[i], str, k, pos+i);
 	}
 	return res;
 }
 
 int totdist_bit(BITSEQ *dna[], size_t t, size_t n, BITSEQ str, size_t k, size_t *pos)
 {
-	int res = 0, temp;
-	// printf("totdist_bit(dna, %zu, %zu, %llx, %zu, pos)\n", t, n, str, k);
+	int res = 0;
 	for (size_t i = 0; i < t; ++i) {
-		if (!prevpat || pos[i]+k-1 >= n || ((dna[i][(pos[i]+k-1)/SEQSIZ] >> 2*(SEQSIZ-(pos[i]+k-1)%SEQSIZ-1)) ^ str) & 3)
-			dists[i] = mindist_bit(dna[i], n, str, k, pos+i);
-		else if (prevpat == NEIGHBOR)
-			--dists[i]; // last character was mismatch, now match
-		else if (dists[i] != (temp = mindist_bit(dna[i], n, str, k, pos+i))) {
-			printbits(stdout, str, k);
-			printf("\t%d\t%d\n", dists[i], temp);
-			dists[i] = temp;
-		}
-		res += dists[i];
+		// if (!prevpat || pos[i]+k-1 >= n || CHAR(dna[i][(pos[i]+k-1)/SEQSIZ], (pos[i]+k-1)%SEQSIZ, SEQSIZ) != CHAR(str, k-1, k))
+		// 	dists[i] = mindist_bit(dna[i], n, str, k, pos+i);
+		// else if (prevpat == NEIGHBOR)
+		// 	--dists[i]; // last character was mismatch, now match
+		// res += dists[i];
+		res += mindist_bit(dna[i], n, str, k, pos+i);
 	}
 	return res;
 }
@@ -233,7 +215,6 @@ int mindist_char(char *seq, BITSEQ str, size_t k, size_t *pos)
 		dist = dist_char(seq+i, str, k);
 		if (dist < res) {
 			res = dist;
-			// printf("*pos = %zu\n", i);
 			*pos = i;
 		}
 	}
@@ -245,14 +226,12 @@ int mindist_bit(BITSEQ *seq, size_t n, BITSEQ str, size_t k, size_t *pos)
 	int res = k, dist;
 	// i represents ending position, not included in string
 	for (size_t i = k; i <= n; ++i) {
-	        // printf("dist_bit(seq, %zu, %llx, %zu)\n", i, str, k);
 		dist = dist_bit(seq, i, str, k);
 		if (dist < res) {
 			res = dist;
-			*pos = i - k + 1;
+			*pos = i - k;
 		}
 	}
-	// printf("\n");
 	return res;
 }
 
@@ -267,29 +246,20 @@ int dist_char(char *seq, BITSEQ str, size_t k)
 	return res;
 }
 
-// test this
 int dist_bit(BITSEQ *seq, size_t i, BITSEQ str, size_t k)
 {
-        // printf("dist_bit(seq, %zu, %llx, %zu)\n", i, str, k);
 	seq += i / SEQSIZ;
 	i %= SEQSIZ;
 
-	// printf("dist_bit(seq, %zu, %llx, %zu)\n", i, str, k);
 	// whether pattern contained in one BITSEQ
 	if (i >= k) {
 		// right justify and compare
 		BITSEQ pat = (*seq >> 2*(SEQSIZ - i)) & (1ll << 2*k) - 1;
-		// printbits(stdout, pat, k); printbits(stdout,str,k);
-		// putchar('\n');
-		// printf("%llx\t%llx\t", str, pat);
 		str ^= pat;
 	} else {
 		// left shift end of *(seq-1) by i and add to right justified portion in *seq
 		BITSEQ patl = (*(seq-1) << 2*i) & (1ll<<2*k)-1,
 		       patr = (*seq >> 2*(SEQSIZ - i));
-		// printbits(stdout,patl|patr,k); printbits(stdout,patr,i); printbits(stdout,str,k);
-		// putchar('\n');
-		// printf("%llx\t%llx\t%llx\t", str, patl, patr);
 		str ^= (patl | patr) & (1ll << 2*k)-1;
 	}
 
@@ -298,11 +268,11 @@ int dist_bit(BITSEQ *seq, size_t i, BITSEQ str, size_t k)
 	return __builtin_popcountll(str); // count nonzero bits in str
 }
 
-// print
+// print, for testing (could be used in main as well)
 
 void printbits(FILE *f, BITSEQ str, size_t k)
 {
 	for (int i = 0; i < k; ++i)
-		fputc(nucs[(str >> (2 * (k - i - 1))) & 3], f); // fputc(CHAR(str, i), f);
-	fputc('\t', f);
+		fputc(CHAR(str, i, k), f);
+	// fputc('\t', f);
 }
