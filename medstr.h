@@ -2,6 +2,8 @@
  * Finding median string of DNA sequences
  * Functions are provided for processing directly on characters, as well as on sequences of two bits
  *  for each nucleotide. Goal is to compare overhead of creating bit sequences with faster searching.
+ * The functions ending with _bit operate on sequences of 64-bit numbers containing 32 two-bit nucleotides,
+ *  instead of strings of characters, and are used in the final version of the program.
  */
 
 #include <stdint.h>
@@ -21,10 +23,10 @@
 // / 2 0x20,     0x21,     0x23,     0x2A
 // % 4   00,       01,       11,       10
 #define BITS(c) (((c) >> 1) & 3)
-extern const char *nucs;
 
 // ith character in BITSEQ of length k starting from the MSB
 #define CHAR(seq, i, k) nucs[((seq) >> (2 * ((k) - (i) - 1))) & 3]
+extern const char *nucs;
 
 // convert sequence of characters into sequence of 2 bits, size of array returned
 // output malloc'd, should be free'd as well
