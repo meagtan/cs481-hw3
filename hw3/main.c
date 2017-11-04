@@ -64,7 +64,7 @@ int main()
 	naivegap(f, seq1, seq2, n, m);
 	fclose(f);
 
-	/*
+
 	f = fopen(OUT2, "w");
 	if (!f) {
 		fprintf(stderr, "Error: could not open file %s.\n", OUT2);
@@ -73,7 +73,6 @@ int main()
 
 	affinegap(f, seq1, seq2, n, m);
 	fclose(f);
-	*/
 
 	free(seq1);
 	free(seq2);
