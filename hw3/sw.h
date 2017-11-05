@@ -15,9 +15,10 @@
 #define BITS(c) (((c) >> 1) & 3)
 
 // substitution matrix, linear gap penalty, gap opening and extension penalties
-extern const int subst[4][4], gap, gapop, gapex;
+extern const int SUBST[4][4], GAP, GAPOP, GAPEX;
 
-#define S(c1, c2) subst[BITS(c1)][BITS(c2)]
+// substitution score of characters c1, c2
+#define SUB(c1, c2) SUBST[BITS(c1)][BITS(c2)]
 
 // Smith-Waterman algorithm using linear gap penalties and affine gap penalties
 void naivegap(FILE *out, char *seq1, char *seq2, int n, int m);

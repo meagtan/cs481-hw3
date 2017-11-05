@@ -10,20 +10,20 @@
 
 #include "sw.h"
 
-// substitution matrix
-const int subst[4][4] = {{ 4, -3, -2, -1},  // A
+// substitution matrix     A   C   T   G
+const int SUBST[4][4] = {{ 4, -3, -2, -1},  // A
                          {-3,  4, -1, -2},  // C
                          {-2, -1,  4, -3},  // T
                          {-1, -2, -3,  4}}; // G
-//                         A   C   T   G
 
-const int gap = -4, gapop = -16, gapex = -4;
+const int GAP = -4, GAPOP = -16, GAPEX = -4;
 
+// if arr[i+1][j+1] less than rval, update it and the traceback matrices
 #define SETMAX(arr, rval, previ, prevj) do {    \
-	if (arr[i+1][j+1] < (rval)) {   \
-		arr[i+1][j+1] = (rval); \
-		bestis[i+1][j+1] = previ; \
-		bestjs[i+1][j+1] = prevj; \
+	if (arr[i+1][j+1] < (rval)) {   	\
+		arr[i+1][j+1] = (rval); 	\
+		bestis[i+1][j+1] = previ; 	\
+		bestjs[i+1][j+1] = prevj; 	\
 	}} while (0)
 
 void naivegap(FILE *out, char *seq1, char *seq2, int n, int m)
@@ -47,9 +47,9 @@ void naivegap(FILE *out, char *seq1, char *seq2, int n, int m)
 	for (i = 0; i < n; ++i) {
 		for (j = 0; j < m; ++j) {
 			// find best parent for scores[i+1][j+1], initially zero
-			SETMAX(scores, scores[i][j] + S(seq1[i], seq2[j]), i, j);
-			SETMAX(scores, scores[i+1][j] + gap, i+1, j);
-			SETMAX(scores, scores[i][j+1] + gap, i, j+1);
+			SETMAX(scores, scores[i][j] + SUB(seq1[i], seq2[j]), i, j);
+			SETMAX(scores, scores[i+1][j] + GAP, i+1, j);
+			SETMAX(scores, scores[i][j+1] + GAP, i, j+1);
 
 			// update maximum score
 			if (scores[i+1][j+1] > scores[besti][bestj]) {
@@ -96,23 +96,31 @@ void affinegap(FILE *out, char *seq1, char *seq2, int n, int m)
 		bestjs[i] = calloc(m+1, sizeof(int));
 	}
 
+	// still should initialize e and f, even though v will be zero due to free rides
+	// otherwise maximum calculations may be skewed
+	for (i = 0; i < n; ++i)
+		f[i][0] = GAPOP + i * GAPEX;
+	for (j = 0; j < m; ++j)
+		e[0][j] = GAPOP + j * GAPEX;
+
 	// fill scoring matrices row by row
-	// no need to initialize first row of e and f, will be 0 anyway
 	for (i = 0; i < n; ++i) {
 		for (j = 0; j < m; ++j) {
-			g[i+1][j+1] = v[i][j] + S(seq1[i], seq2[j]);
-
 			// maximize e[i+1][j+1]
-			e[i+1][j+1] = e[i+1][j] + gapex;
-			SETMAX(e, g[i+1][j] + gapop + gapex, 0, 0);
-			SETMAX(e, f[i+1][j] + gapop + gapex, 0, 0);
+			// SETMAX(e, e[i+1][j] + GAPEX, 0, 0);
+			e[i+1][j+1] = e[i+1][j] + GAPEX;
+			SETMAX(e, g[i+1][j] + GAPOP + GAPEX, 0, 0);
+			SETMAX(e, f[i+1][j] + GAPOP + GAPEX, 0, 0);
 
 			// maximize f[i+1][j+1]
-			f[i+1][j+1] = f[i][j+1] + gapex;
-			SETMAX(f, g[i][j+1] + gapop + gapex, 0, 0);
-			SETMAX(f, e[i][j+1] + gapop + gapex, 0, 0);
+			// SETMAX(f, f[i][j+1] + GAPEX, 0, 0);
+			f[i+1][j+1] = f[i][j+1] + GAPEX;
+			SETMAX(f, g[i][j+1] + GAPOP + GAPEX, 0, 0);
+			SETMAX(f, e[i][j+1] + GAPOP + GAPEX, 0, 0);
 
-			// maximize v[i+1][j+1], set bestis, bestjs
+			g[i+1][j+1] = v[i][j] + SUB(seq1[i], seq2[j]);
+
+			// maximize v[i+1][j+1], initially 0, set bestis, bestjs
 			SETMAX(v, e[i+1][j+1], i+1, j); // j+1 matches a space
 			SETMAX(v, f[i+1][j+1], i, j+1); // i+1 matches a space
 			SETMAX(v, g[i+1][j+1], i, j);   // i+1, j+1 match

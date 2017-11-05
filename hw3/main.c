@@ -33,7 +33,7 @@ int main()
 		return 1;
 	}
 
-	fscanf(f, ">Sequence1\n");
+	fscanf(f, ">%*s\n"); // discard sequence name
 	// read until new sequence starts
 	do {
 		seq1[n] = fgetc(f);         // write current character to string
@@ -41,7 +41,7 @@ int main()
 	} while (n < MAXLEN && seq1[n] != '>');
 	seq1[n] = '\0';
 
-	fscanf(f, "Sequence2\n"); // > already read
+	fscanf(f, "%*s\n"); // > already read
 	// read second sequence until eof
 	do {
 		seq2[m] = fgetc(f);
