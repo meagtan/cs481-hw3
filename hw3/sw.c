@@ -22,8 +22,8 @@ const int GAP = -4, GAPOP = -16, GAPEX = -4;
 #define SETMAX(arr, rval, previ, prevj) do {    \
 	if (arr[i+1][j+1] < (rval)) {   	\
 		arr[i+1][j+1] = (rval); 	\
-		bestis[i+1][j+1] = previ; 	\
-		bestjs[i+1][j+1] = prevj; 	\
+		bestis[i+1][j+1] = (previ); 	\
+		bestjs[i+1][j+1] = (prevj); 	\
 	}} while (0)
 
 void naivegap(FILE *out, char *seq1, char *seq2, int n, int m)
@@ -160,7 +160,7 @@ void traceback(FILE *out, char *seq1, char *seq2, int besti, int bestj, int **sc
 	// write alignment backwards to arrays
 	char *align1, *align2;
 	int temp, len = 0; // length of alignment
-	align1 = calloc(besti+bestj, sizeof(char)); // alignment can be of length at most n+m, corresponding to all indels
+	align1 = calloc(besti+bestj, sizeof(char)); // alignment can be of length at most besti+bestj, corresponding to all indels
 	align2 = calloc(besti+bestj, sizeof(char));
 
 	// start from (besti, bestj), trace back until score 0
